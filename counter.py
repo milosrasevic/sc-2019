@@ -40,26 +40,19 @@ def borders_cross(borders, current_pedestrian_position):
     left_border = borders[2]
     right_border = borders[1]
 
-    if top_border_cross(top_border, current_pedestrian_position):
+    if border_cross(top_border, current_pedestrian_position):
         return True
 
-    if vertical_border_cross(left_border, current_pedestrian_position):
+    if border_cross(left_border, current_pedestrian_position):
         return True
 
-    if vertical_border_cross(right_border, current_pedestrian_position):
+    if border_cross(right_border, current_pedestrian_position):
         return True
 
     return False
 
 
-def top_border_cross(top_border , current_pedestrian_position):
-    current_pedestrian_x, current_pedestrian_y = get_pedestrian_positions(current_pedestrian_position)
-
-    return (top_border[0] < current_pedestrian_x < top_border[2]) and (
-            top_border[3] < current_pedestrian_y < top_border[1])
-
-
-def vertical_border_cross(border, current_pedestrian_position):
+def border_cross(border, current_pedestrian_position):
     current_pedestrian_x, current_pedestrian_y = get_pedestrian_positions(current_pedestrian_position)
 
     return (border[3] < current_pedestrian_y < border[1]) and (
@@ -74,7 +67,7 @@ def count_pedestrians(borders, video_number):
     pedestrian_count = 0
 
     video = cv2.VideoCapture("data/video" + str(video_number) + ".mp4")
-    previous_frame = None
+    has_next, previous_frame = video.read()
     frame_number = 0
     while True:
         frame_number += 1
@@ -86,15 +79,8 @@ def count_pedestrians(borders, video_number):
         if frame_number % 6 != 0:
             continue
 
-        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        if previous_frame is None:
-            previous_frame = frame_gray
-            continue
-
-        differences = cv2.absdiff(previous_frame, frame_gray)
-
-        previous_frame = frame_gray
+        differences = cv2.absdiff(cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY),
+                                  cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
 
         binary_differences = cv2.dilate(cv2.threshold(differences, 13, 255, cv2.THRESH_BINARY)[1], np.ones((3, 3)), 3)
 
@@ -110,6 +96,8 @@ def count_pedestrians(borders, video_number):
             if borders_cross(borders, [c_x, c_y]):
                 pedestrian_count += 1
 
+        previous_frame = frame
+
     video.release()
     return pedestrian_count
 
@@ -121,6 +109,10 @@ if __name__ == '__main__':
         y_predicted = []
 
         for i in range(1, 11):
-            y_predicted.append(count_pedestrians(borders, i))
+            count = count_pedestrians(borders, i)
+            y_predicted.append(count)
+            print("Video " + str(i) + ": " + str(count) + " pedestrians")
 
         print("MAE: ", mean_absolute_error(test_y, y_predicted))
+    else:
+        "Error! Could not detect borders."
