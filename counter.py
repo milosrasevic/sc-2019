@@ -53,14 +53,10 @@ def borders_cross(borders, current_pedestrian_position):
 
 
 def border_cross(border, current_pedestrian_position):
-    current_pedestrian_x, current_pedestrian_y = get_pedestrian_positions(current_pedestrian_position)
+    current_pedestrian_x, current_pedestrian_y = current_pedestrian_position[0], current_pedestrian_position[1]
 
     return (border[3] < current_pedestrian_y < border[1]) and (
             border[0] < current_pedestrian_x < border[2])
-
-
-def get_pedestrian_positions(current_pedestrian_position):
-    return current_pedestrian_position[0], current_pedestrian_position[1]
 
 
 def count_pedestrians(borders, video_number):
