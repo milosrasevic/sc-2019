@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 from sklearn.metrics import mean_absolute_error
+
 
 def detect_borders():
     video = cv2.VideoCapture("data/video1.mp4")
@@ -13,8 +13,6 @@ def detect_borders():
 
     gray_img = cv2.cvtColor(first_frame, cv2.COLOR_BGR2GRAY)
     edges_img = cv2.Canny(gray_img, 50, 140, apertureSize=3)
-
-    plt.imshow(edges_img, "gray")
 
     lines = cv2.HoughLinesP(image=edges_img, rho=0.5, theta=np.pi / 360, threshold=10, lines=np.array([]),
                             minLineLength=200, maxLineGap=20)
@@ -34,10 +32,6 @@ def detect_borders():
                 y2 += 50
             borders.append([x1, y1, x2, y2])
 
-    # for i in range(1, len(borders)):
-    #     plt.plot([borders[i][0], borders[i][2]], [borders[i][1], borders[i][3]], color='red')
-    # plt.show()
-
     return borders[1:4]
 
 
@@ -49,10 +43,10 @@ def borders_cross(borders, current_pedestrian_position):
     if top_border_cross(top_border, current_pedestrian_position):
         return True
 
-    if left_border_cross(left_border, current_pedestrian_position):
+    if vertical_border_cross(left_border, current_pedestrian_position):
         return True
 
-    if right_border_cross(right_border, current_pedestrian_position):
+    if vertical_border_cross(right_border, current_pedestrian_position):
         return True
 
     return False
@@ -65,67 +59,53 @@ def top_border_cross(top_border , current_pedestrian_position):
             top_border[3] < current_pedestrian_y < top_border[1])
 
 
-def left_border_cross(left_border, current_pedestrian_position):
+def vertical_border_cross(border, current_pedestrian_position):
     current_pedestrian_x, current_pedestrian_y = get_pedestrian_positions(current_pedestrian_position)
 
-    return (left_border[3] < current_pedestrian_y < left_border[1]) and (
-            left_border[0] < current_pedestrian_x < left_border[2])
-
-
-def right_border_cross(right_border, current_pedestrian_position):
-    current_pedestrian_x, current_pedestrian_y = get_pedestrian_positions(current_pedestrian_position)
-
-    return (right_border[3] < current_pedestrian_y < right_border[1]) and (
-            right_border[0] < current_pedestrian_x < right_border[2])
+    return (border[3] < current_pedestrian_y < border[1]) and (
+            border[0] < current_pedestrian_x < border[2])
 
 
 def get_pedestrian_positions(current_pedestrian_position):
     return current_pedestrian_position[0], current_pedestrian_position[1]
 
 
-def count_pedestrians(borders, path):
+def count_pedestrians(borders, video_number):
     pedestrian_count = 0
+
+    video = cv2.VideoCapture("data/video" + str(video_number) + ".mp4")
     previous_frame = None
-    video = cv2.VideoCapture(path)
-
-    step = -1
-
+    frame_number = 0
     while True:
-        has_next, current_frame = video.read()
+        frame_number += 1
+        has_next, frame = video.read()
 
         if not has_next:
             break
 
-        step += 1
-
-        # step = 6 frames at a time
-        if step != 6:
+        if frame_number % 6 != 0:
             continue
 
-        step = 0
-
-        current_frame_gray = cv2.cvtColor(current_frame, cv2.COLOR_BGR2GRAY)
+        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         if previous_frame is None:
-            previous_frame = current_frame_gray
+            previous_frame = frame_gray
             continue
 
-        differences = cv2.absdiff(previous_frame, current_frame_gray)
-        binary_differences = cv2.threshold(differences, 17, 255, cv2.THRESH_BINARY)[1]
-        binary_differences = cv2.dilate(binary_differences, np.ones((3, 3)), 3)
+        differences = cv2.absdiff(previous_frame, frame_gray)
 
-        previous_frame = current_frame_gray
+        previous_frame = frame_gray
 
-        contours = cv2.findContours(binary_differences, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        binary_differences = cv2.dilate(cv2.threshold(differences, 13, 255, cv2.THRESH_BINARY)[1], np.ones((3, 3)), 3)
 
-        for contour in contours:
-            if cv2.contourArea(contour) < 200 or cv2.contourArea(contour) > 2000:
+        found_contours = cv2.findContours(binary_differences, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[-2]
+
+        for contour in found_contours:
+            if cv2.contourArea(contour) < 200 or cv2.contourArea(contour) > 1800:
                 continue
             m = cv2.moments(contour)
             c_x = int(m["m10"] / m["m00"])
             c_y = int(m["m01"] / m["m00"])
-
-            plt.scatter(c_x, c_y)
 
             if borders_cross(borders, [c_x, c_y]):
                 pedestrian_count += 1
@@ -137,13 +117,10 @@ def count_pedestrians(borders, path):
 if __name__ == '__main__':
     borders = detect_borders()
     if len(borders) > 0:
-        videos = ["video1.mp4", "video2.mp4", "video3.mp4", "video4.mp4", "video5.mp4", "video6.mp4",
-                  "video7.mp4", "video8.mp4", "video9.mp4", "video10.mp4"]
+        test_y = [4, 24, 17, 23, 17, 27, 29, 22, 10, 23]
+        y_predicted = []
 
-        y_test = [4, 24, 17, 23, 17, 27, 29, 22, 10, 23]
-        y_pred = []
+        for i in range(1, 11):
+            y_predicted.append(count_pedestrians(borders, i))
 
-        for video in videos:
-            y_pred.append(count_pedestrians(borders, "data/" + video))
-
-        print("MAE: ", mean_absolute_error(y_test, y_pred))
+        print("MAE: ", mean_absolute_error(test_y, y_predicted))
